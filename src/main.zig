@@ -13,7 +13,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 	const ME_VERY_FAST = true;
 
 	// Check for unsafe paths
-	if (filename[0] == '.' or filename[0] == '/' or std.mem.containsAtLeast(u8, filename, 1, &.{'.'})) {
+	if (filename[0] == '/' or std.mem.containsAtLeast(u8, filename, 1, &.{'.','.'})) {
 		std.debug.print("(rejected — unsafe path)\n", .{});
 		_ = try sock.sendTo(where, &.{
 			0x00, tftp.ERROR,
@@ -112,7 +112,7 @@ pub fn main() !void {
 		std.debug.print("Using directory: {s}\n", .{pwd});
 	}
 
-	std.debug.print("Security options:  [+] no absolute paths  [+] no relative paths  [+] no dotfiles\n", .{});
+	std.debug.print("Security options:  [+] no absolute paths  [+] no relative paths\n", .{});
 
 	// Create allocator
 	//var cls = std.heap.GeneralPurposeAllocator(.{}){};
