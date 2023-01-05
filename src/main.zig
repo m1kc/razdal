@@ -9,6 +9,41 @@ const BUFSIZE: usize = 8192;
 var recv_buffer: [BUFSIZE]u8 = undefined;
 
 
+fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoint) !void {
+	// Check for unsafe paths
+	if (filename[0] == '.' or filename[0] == '/') {
+		std.debug.print("Rejected (unsafe path)\n", .{});
+		return;
+	}
+
+	// Open file
+	var file = try std.fs.cwd().openFile(filename, .{});
+	defer file.close();
+	var file_buffer: [512]u8 = undefined;
+
+	var more = true;
+	var pkno: u8 = 1;
+	var reply: [512 + 4]u8 = undefined;
+
+	while (more) {
+		const len = try file.read(&file_buffer);
+		if (len < 512) more = false;
+		reply[0] = 0; reply[1] = tftp.DATA;
+		reply[2] = 0; reply[3] = pkno;
+		var marker: usize = 4;
+		for (file_buffer[0..len]) |b| {
+			reply[marker] = b;
+			marker += 1;
+		}
+
+		pkno += 1;
+
+		if (tftp.PROTOCOL_DEBUG) std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{marker, marker-4});
+		_ = try sock.sendTo(where, reply[0..marker]);
+	}
+}
+
+
 fn serve(sock: network.Socket) !void {
 	while (true) {
 		const recv_msg = try sock.receiveFrom(recv_buffer[0..BUFSIZE]);
@@ -30,38 +65,7 @@ fn serve(sock: network.Socket) !void {
 
 		const filename = tftp.get_filename(recv_buffer[0..BUFSIZE]);
 		std.debug.print("Requested file: {s}\n", .{filename});
-
-		// Read file from FS
-
-		if (pkt.data_filename[0] == '.' or pkt.data_filename[0] == '/') {
-			std.debug.print("Rejected (unsafe path)\n", .{});
-			continue;
-		}
-
-		var file = try std.fs.cwd().openFile(pkt.data_filename, .{});
-		defer file.close();
-		var file_buffer: [512]u8 = undefined;
-
-		var more = true;
-		var pkno: u8 = 1;
-		var reply: [512 + 4]u8 = undefined;
-
-		while (more) {
-			const len = try file.read(&file_buffer);
-			if (len < 512) more = false;
-			reply[0] = 0; reply[1] = tftp.DATA;
-			reply[2] = 0; reply[3] = pkno;
-			var marker: usize = 4;
-			for (file_buffer[0..len]) |b| {
-				reply[marker] = b;
-				marker += 1;
-			}
-
-			pkno += 1;
-
-			if (tftp.PROTOCOL_DEBUG) std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{marker, marker-4});
-			_ = try sock.sendTo(recv_msg.sender, reply[0..marker]);
-		}
+		try serve_file(sock, filename, recv_msg.sender);
 	}
 }
 
