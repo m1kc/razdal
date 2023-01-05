@@ -13,7 +13,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 	const ME_VERY_FAST = true;
 
 	// Check for unsafe paths
-	if (filename[0] == '.' or filename[0] == '/') {
+	if (filename[0] == '.' or filename[0] == '/' or std.mem.containsAtLeast(u8, filename, 1, &.{'.'})) {
 		std.debug.print("(rejected — unsafe path)\n", .{});
 		_ = try sock.sendTo(where, &.{
 			0x00, tftp.ERROR,
