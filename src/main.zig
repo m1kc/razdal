@@ -6,25 +6,16 @@ const tftp = @import("./tftp.zig");
 test { _ = tftp; } //std.testing.refAllDecls(@This());
 
 
-fn burn(data: []const u8, output: []u8, index: usize) usize {
-	var ret = index;
-	for (data) |value| {
-		output[ret] = value;
-		ret += 1;
-	}
-	return ret;
-}
-
 pub fn main() !void {
 	// Create allocator
-	// var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+	//var cls = std.heap.GeneralPurposeAllocator(.{}){};
 	var memory: [1024]u8 = undefined;
-	var gpa = std.heap.FixedBufferAllocator.init(&memory);
-	const allocator = gpa.allocator();
+	var cls = std.heap.FixedBufferAllocator.init(&memory);
+	const stackAllocator = cls.allocator();
 
 	// Parse cmdline
-	const args = try std.process.argsAlloc(allocator);
-	defer std.process.argsFree(allocator, args);
+	const args = try std.process.argsAlloc(stackAllocator);
+	defer std.process.argsFree(stackAllocator, args);
 
 	if (args.len != 3) {
 		std.debug.print("Invalid arguments.", .{});
@@ -76,22 +67,36 @@ pub fn main() !void {
 		const filename = tftp.get_filename(msg[0..buflen]);
 		std.debug.print("filename = {s}\n", .{filename});
 
-		const payload = @embedFile("main.zig");
-		// const payload = "Ты пидор";
-		// const payload: []const u8 = &(.{'h'} ** 512);
+		// Read file from FS
 
-		var cursor: []const u8 = payload;
+		if (pkt.data_filename[0] == '.' or pkt.data_filename[0] == '/') {
+			std.debug.print("Unsafe path\n", .{});
+			continue;
+		}
+
+		var file = try std.fs.cwd().openFile(pkt.data_filename, .{});
+		defer file.close();
+		var file_buffer: [512]u8 = undefined;
+
 		var more = true;
 		var pkno: u8 = 1;
 		var reply: [512 + 4]u8 = undefined;
 
 		while (more) {
-			const t = tftp.compose_data_packet(cursor, pkno, &reply);
-			cursor = t.cursor;
-			more = t.more;
-			pkno = t.pkno;
-			std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{t.reply.len, t.reply.len - 4});
-			_ = try sock.sendTo(recv_msg.sender, t.reply);
+			const len = try file.read(&file_buffer);
+			if (len < 512) more = false;
+			reply[0] = 0; reply[1] = tftp.DATA;
+			reply[2] = 0; reply[3] = pkno;
+			var marker: usize = 4;
+			for (file_buffer[0..len]) |b| {
+				reply[marker] = b;
+				marker += 1;
+			}
+
+			pkno += 1;
+
+			std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{marker, marker-4});
+			_ = try sock.sendTo(recv_msg.sender, reply[0..marker]);
 		}
 	}
 }
