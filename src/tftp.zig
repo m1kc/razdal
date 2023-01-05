@@ -1,3 +1,4 @@
+const builtin = @import("builtin");
 const std = @import("std");
 const assert = @import("std").debug.assert;
 const network = @import("network");
@@ -7,11 +8,15 @@ const expectEqualStrings = @import("std").testing.expectEqualStrings;
 const math = @import("std").math;
 
 
+pub var PROTOCOL_DEBUG = (false) and !builtin.is_test;
+
 pub const RRQ = 1;    // Read request (RRQ)
 pub const WRQ = 2;    // Write request (WRQ)
 pub const DATA = 3;   // Data (DATA)
 pub const ACK = 4;    // Acknowledgment (ACK)
 pub const ERROR = 5;  // Error (ERROR)
+
+pub const TransferMode = enum { octet, netascii, unknown };
 
 
 pub fn bytes_to_int(comptime T: type, bytes: []const u8) T {
@@ -34,19 +39,29 @@ test "bytes_to_int" {
 pub const Packet = struct {
 	opcode: u16,
 	data_filename: []const u8,
-	data_transfer_mode: []const u8,
+	data_transfer_mode: TransferMode,
 };
 
 pub fn parse(msg: []const u8) Packet {
 	const opcode = get_opcode(msg);
 	var data_filename: []const u8 = "";
-	var data_transfer_mode: []const u8 = "";
+	var data_transfer_mode_s: []const u8 = "";
+	var data_transfer_mode = TransferMode.unknown;
 
 	if (opcode == RRQ) {
 		data_filename = get_filename(msg);
-		data_transfer_mode = find_sentinel(msg, 2+data_filename.len+1);
+
+		data_transfer_mode_s = find_sentinel(msg, 2+data_filename.len+1);
+		if (data_transfer_mode_s[0] == 'o' or data_transfer_mode_s[0] == 'O') {
+			data_transfer_mode = TransferMode.octet;
+		}
+		if (data_transfer_mode_s[0] == 'n' or data_transfer_mode_s[0] == 'N') {
+			data_transfer_mode = TransferMode.netascii;
+		}
 	}
 
+	if (PROTOCOL_DEBUG) std.debug.print(" > opcode = {}\n", .{opcode});
+	if (PROTOCOL_DEBUG and opcode == RRQ) std.debug.print(" > filename = {s}, transfer mode = {s}\n", .{data_filename, data_transfer_mode_s});
 	return Packet{
 		.opcode = opcode,
 		.data_filename = data_filename,
@@ -57,10 +72,10 @@ pub fn parse(msg: []const u8) Packet {
 test "parse" {
 	var p: Packet = undefined;
 
-	p = parse(&.{ 0x00, 0x01, 'w', 'o', 0x00, '$', 0x00 });
+	p = parse(&.{ 0x00, 0x01, 'w','o', 0x00, 'O','C','T','E','T', 0x00 });
 	try expectEqual(p.opcode, RRQ);
 	try expectEqualStrings("wo", p.data_filename);
-	try expectEqualStrings("$", p.data_transfer_mode);
+	try expectEqual(TransferMode.octet, p.data_transfer_mode);
 }
 
 

@@ -11,7 +11,7 @@ test:
 	zig build test
 
 run:
-	sudo ./zig-out/bin/udprecv 0.0.0.0 69
+	sudo ./zig-out/bin/udprecv 0.0.0.0 69 --debug
 
 clean:
 	rm -rfv ./zig-out ./zig-cache

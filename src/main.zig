@@ -12,15 +12,15 @@ fn serve(sock: network.Socket) !void {
 	var msg: [buflen]u8 = undefined;
 	while (true) {
 		const recv_msg = try sock.receiveFrom(msg[0..buflen]);
+		if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
 		const pkt = tftp.parse(&msg);
-		std.debug.print(">> Packet from {}:{}, parsed = {}\n", .{recv_msg.sender.address, recv_msg.sender.port, pkt});
 
 		// REPLY TO RRQ
 
 		if (pkt.opcode != tftp.RRQ) continue;
 
 		// `octet` mode only
-		if (pkt.data_transfer_mode[0] == 'o' or pkt.data_transfer_mode[0] == 'O') {
+		if (pkt.data_transfer_mode == tftp.TransferMode.octet) {
 			// ok
 		} else {
 			// not supported
@@ -29,12 +29,12 @@ fn serve(sock: network.Socket) !void {
 		}
 
 		const filename = tftp.get_filename(msg[0..buflen]);
-		std.debug.print("filename = {s}\n", .{filename});
+		std.debug.print("Requested file: {s}\n", .{filename});
 
 		// Read file from FS
 
 		if (pkt.data_filename[0] == '.' or pkt.data_filename[0] == '/') {
-			std.debug.print("Unsafe path\n", .{});
+			std.debug.print("Rejected (unsafe path)\n", .{});
 			continue;
 		}
 
@@ -59,7 +59,7 @@ fn serve(sock: network.Socket) !void {
 
 			pkno += 1;
 
-			std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{marker, marker-4});
+			if (tftp.PROTOCOL_DEBUG) std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{marker, marker-4});
 			_ = try sock.sendTo(recv_msg.sender, reply[0..marker]);
 		}
 	}
@@ -87,9 +87,13 @@ pub fn main() !void {
 	const args = try std.process.argsAlloc(stackAllocator);
 	defer std.process.argsFree(stackAllocator, args);
 
-	if (args.len != 3) {
+	if (args.len != 3 and args.len != 4) {
 		std.debug.print("Usage: tftpd <ip addr> <port>\n", .{});
 		std.os.exit(1);
+	}
+
+	if (args.len == 4 and std.mem.eql(u8, args[3], "--debug")) {
+		tftp.PROTOCOL_DEBUG = true;
 	}
 
 	// Init network
