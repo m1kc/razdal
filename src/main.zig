@@ -25,6 +25,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 	// Open file
 	var file = std.fs.cwd().openFile(filename, .{}) catch {
+		std.debug.print("(rejected — can't open)\n", .{});
 		_ = try sock.sendTo(where, &.{
 			0x00, tftp.ERROR,
 			0x00, 0x01, // not found
