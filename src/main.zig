@@ -5,51 +5,15 @@ const tftp = @import("./tftp.zig");
 
 test { _ = tftp; } //std.testing.refAllDecls(@This());
 
+const buflen: usize = 8192;
 
-pub fn main() !void {
-	// Create allocator
-	//var cls = std.heap.GeneralPurposeAllocator(.{}){};
-	var memory: [1024]u8 = undefined;
-	var cls = std.heap.FixedBufferAllocator.init(&memory);
-	const stackAllocator = cls.allocator();
 
-	// Parse cmdline
-	const args = try std.process.argsAlloc(stackAllocator);
-	defer std.process.argsFree(stackAllocator, args);
-
-	if (args.len != 3) {
-		std.debug.print("Invalid arguments.", .{});
-		std.os.exit(1);
-	}
-
-	// Init network
-	try network.init();
-	defer network.deinit();
-
-	var sock = try network.Socket.create(.ipv4, .udp);
-	defer sock.close();
-
-	const v4_address = try network.Address.IPv4.parse(args[1]);
-	const port: u16 = try std.fmt.parseInt(u16, args[2], 10);
-
-	try sock.bind(.{
-		.address = .{ .ipv4 = v4_address },
-		.port = port,
-	});
-
-	std.debug.print("Ready to accept connections\n", .{});
-
-	// Main loop
-	const buflen: usize = 8192;
+fn serve(sock: network.Socket) !void {
 	var msg: [buflen]u8 = undefined;
 	while (true) {
 		const recv_msg = try sock.receiveFrom(msg[0..buflen]);
-		//std.debug.print("{s}", .{msg});
-
-		const remote_addr = recv_msg.sender.address;
-		const remote_port = recv_msg.sender.port;
 		const pkt = tftp.parse(&msg);
-		std.debug.print(">> Packet from {}:{}, parsed = {}\n", .{remote_addr, remote_port, pkt});
+		std.debug.print(">> Packet from {}:{}, parsed = {}\n", .{recv_msg.sender.address, recv_msg.sender.port, pkt});
 
 		// REPLY TO RRQ
 
@@ -99,4 +63,50 @@ pub fn main() !void {
 			_ = try sock.sendTo(recv_msg.sender, reply[0..marker]);
 		}
 	}
+}
+
+
+pub fn main() !void {
+	std.debug.print("\n//////// This is m1kc-tftpd, pre-release ////////\n", .{});
+
+	{
+		var buf: [10240]u8 = undefined;
+		const pwd = try std.fs.cwd().realpath(".", &buf);
+		std.debug.print("Using directory: {s}\n", .{pwd});
+	}
+
+	std.debug.print("Security options:  [+] no absolute paths  [+] no relative paths  [+] no dotfiles\n", .{});
+
+	// Create allocator
+	//var cls = std.heap.GeneralPurposeAllocator(.{}){};
+	var memory: [1024]u8 = undefined;
+	var cls = std.heap.FixedBufferAllocator.init(&memory);
+	const stackAllocator = cls.allocator();
+
+	// Parse cmdline
+	const args = try std.process.argsAlloc(stackAllocator);
+	defer std.process.argsFree(stackAllocator, args);
+
+	if (args.len != 3) {
+		std.debug.print("Usage: tftpd <ip addr> <port>\n", .{});
+		std.os.exit(1);
+	}
+
+	// Init network
+	try network.init();
+	defer network.deinit();
+
+	var sock = try network.Socket.create(.ipv4, .udp);
+	defer sock.close();
+
+	const v4_address = try network.Address.IPv4.parse(args[1]);
+	const port: u16 = try std.fmt.parseInt(u16, args[2], 10);
+
+	try sock.bind(.{
+		.address = .{ .ipv4 = v4_address },
+		.port = port,
+	});
+
+	std.debug.print("Accepting connections on {}, UDP port {}\n", .{v4_address, port});
+	return serve(sock);
 }
