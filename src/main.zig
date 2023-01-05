@@ -10,6 +10,8 @@ var recv_buffer: [BUFSIZE]u8 = undefined;
 
 
 fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoint) !void {
+	const ME_VERY_FAST = true;
+
 	// Check for unsafe paths
 	if (filename[0] == '.' or filename[0] == '/') {
 		std.debug.print("Rejected (unsafe path)\n", .{});
@@ -38,8 +40,26 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 		pkno += 1;
 
-		if (tftp.PROTOCOL_DEBUG) std.debug.print("Sending DATA, len = {}, sans header = {}\n", .{marker, marker-4});
+		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}\n", .{marker, marker-4});
 		_ = try sock.sendTo(where, reply[0..marker]);
+
+		if (!ME_VERY_FAST) {
+			// Wait for ACK after each packet
+			const recv_msg = try sock.receiveFrom(recv_buffer[0..BUFSIZE]);
+			if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
+			const pkt = tftp.parse(&recv_buffer);
+
+			//if (recv_msg.sender.address != where.address or recv_msg.sender.port != where.port) {
+			if (recv_msg.sender.port != where.port) {
+				std.debug.print("Dropped packet (I'm busy)\n", .{});
+				continue;
+			}
+
+			if (pkt.opcode != tftp.ACK) {
+				// panic
+				continue;
+			}
+		}
 	}
 }
 
