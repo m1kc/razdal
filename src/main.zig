@@ -84,7 +84,7 @@ fn serve(sock: network.Socket) !void {
 		}
 
 		const filename = tftp.get_filename(recv_buffer[0..BUFSIZE]);
-		std.debug.print("Requested file: {s}\n", .{filename});
+		std.debug.print("{} requested file: {s}\n", .{recv_msg.sender.address, filename});
 		try serve_file(sock, filename, recv_msg.sender);
 	}
 }
@@ -135,6 +135,6 @@ pub fn main() !void {
 		.port = port,
 	});
 
-	std.debug.print("Accepting connections on {}, UDP port {}\n", .{v4_address, port});
+	std.debug.print("Accepting connections on {}, UDP port {}\n\n", .{v4_address, port});
 	return serve(sock);
 }
