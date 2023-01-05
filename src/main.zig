@@ -5,15 +5,15 @@ const tftp = @import("./tftp.zig");
 
 test { _ = tftp; } //std.testing.refAllDecls(@This());
 
-const buflen: usize = 8192;
+const BUFSIZE: usize = 8192;
+var recv_buffer: [BUFSIZE]u8 = undefined;
 
 
 fn serve(sock: network.Socket) !void {
-	var msg: [buflen]u8 = undefined;
 	while (true) {
-		const recv_msg = try sock.receiveFrom(msg[0..buflen]);
+		const recv_msg = try sock.receiveFrom(recv_buffer[0..BUFSIZE]);
 		if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
-		const pkt = tftp.parse(&msg);
+		const pkt = tftp.parse(&recv_buffer);
 
 		// REPLY TO RRQ
 
@@ -28,7 +28,7 @@ fn serve(sock: network.Socket) !void {
 			continue;
 		}
 
-		const filename = tftp.get_filename(msg[0..buflen]);
+		const filename = tftp.get_filename(recv_buffer[0..BUFSIZE]);
 		std.debug.print("Requested file: {s}\n", .{filename});
 
 		// Read file from FS
