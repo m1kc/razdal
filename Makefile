@@ -1,13 +1,16 @@
-all: build
+all: release
 
 
-build:
+debug:
+	zig build
+
+release:
 	zig build -Drelease-safe
 
 test:
 	zig build test
 
-run: build
+run:
 	sudo ./zig-out/bin/udprecv 0.0.0.0 69
 
 clean:
