@@ -14,12 +14,24 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 	// Check for unsafe paths
 	if (filename[0] == '.' or filename[0] == '/') {
-		std.debug.print("Rejected (unsafe path)\n", .{});
+		std.debug.print("(rejected — unsafe path)\n", .{});
+		_ = try sock.sendTo(where, &.{
+			0x00, tftp.ERROR,
+			0x00, 0x02, // access violation
+			0x00, // no text
+		});
 		return;
 	}
 
 	// Open file
-	var file = try std.fs.cwd().openFile(filename, .{});
+	var file = std.fs.cwd().openFile(filename, .{}) catch {
+		_ = try sock.sendTo(where, &.{
+			0x00, tftp.ERROR,
+			0x00, 0x01, // not found
+			0x00, // no text
+		});
+		return;
+	};
 	defer file.close();
 	var file_buffer: [512]u8 = undefined;
 
