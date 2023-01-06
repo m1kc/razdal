@@ -110,10 +110,8 @@ fn serve(sock: network.Socket) !void {
 		// REPLY TO RRQ
 		if (pkt.opcode != tftp.RRQ) continue;
 
-		// `octet` mode only
-		if (pkt.data_transfer_mode == tftp.TransferMode.octet) {
-			// ok
-		} else {
+		// both `octet` and `netascii` transfer file as-is, this seems to be OK with the RFC
+		if (pkt.data_transfer_mode == tftp.TransferMode.unknown) {
 			// not supported
 			std.debug.print("Unsupported transfer mode, ignoring\n", .{});
 			_ = sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
