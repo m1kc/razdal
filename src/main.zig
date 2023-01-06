@@ -8,6 +8,19 @@ test { _ = tftp; } //std.testing.refAllDecls(@This());
 const BUFSIZE: usize = 8192;
 var recv_buffer: [BUFSIZE]u8 = undefined;
 
+var current_transfer: Transfer = .{};
+
+
+const Transfer = struct {
+	in_flight: bool = false,
+
+	remote: network.EndPoint = undefined,
+
+	filename: []const u8 = undefined,
+	file: std.fs.File = undefined,
+	pkno: u16 = 0,
+};
+
 
 fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoint) !void {
 	const ME_VERY_FAST = true;
@@ -15,46 +28,46 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 	// Check for unsafe paths
 	if (filename[0] == '/' or std.mem.containsAtLeast(u8, filename, 1, &.{'.','.'})) {
 		std.debug.print("(rejected — unsafe path)\n", .{});
-		_ = try sock.sendTo(where, &.{
-			0x00, tftp.ERROR,
-			0x00, 0x02, // access violation
-			0x00, // no text
-		});
+		_ = try sock.sendTo(where, tftp.compose_error_packet(tftp.ErrorCode.access_violation));
 		return;
 	}
 
+	current_transfer.in_flight = true;
+	current_transfer.remote = where;
+	current_transfer.filename = filename;
+
 	// Open file
-	var file = std.fs.cwd().openFile(filename, .{}) catch {
+	var f = std.fs.cwd().openFile(filename, .{}) catch {
 		std.debug.print("(rejected — can't open)\n", .{});
-		_ = try sock.sendTo(where, &.{
-			0x00, tftp.ERROR,
-			0x00, 0x01, // not found
-			0x00, // no text
-		});
+		_ = try sock.sendTo(current_transfer.remote, tftp.compose_error_packet(tftp.ErrorCode.file_not_found));
 		return;
 	};
-	defer file.close();
+	current_transfer.file = f;
+	defer current_transfer.file.close();
+
 	var file_buffer: [512]u8 = undefined;
 
 	var more = true;
-	var pkno: u8 = 1;
+	current_transfer.pkno = 1;
 	var reply: [512 + 4]u8 = undefined;
 
 	while (more) {
-		const len = try file.read(&file_buffer);
+		const len = try current_transfer.file.read(&file_buffer);
 		if (len < 512) more = false;
-		reply[0] = 0; reply[1] = tftp.DATA;
-		reply[2] = 0; reply[3] = pkno;
+		reply[0] = 0;
+		reply[1] = tftp.DATA;
+		reply[2] = tftp.int_to_bytes(current_transfer.pkno)[0];
+		reply[3] = tftp.int_to_bytes(current_transfer.pkno)[1];
 		var marker: usize = 4;
 		for (file_buffer[0..len]) |b| {
 			reply[marker] = b;
 			marker += 1;
 		}
 
-		pkno += 1;
+		current_transfer.pkno += 1;
 
-		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}\n", .{marker, marker-4});
-		_ = try sock.sendTo(where, reply[0..marker]);
+		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}, head = {}\n", .{marker, marker-4, std.fmt.fmtSliceEscapeLower(reply[0..4])});
+		_ = try sock.sendTo(current_transfer.remote, reply[0..marker]);
 
 		if (!ME_VERY_FAST) {
 			// Wait for ACK after each packet
@@ -62,8 +75,8 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 			if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
 			const pkt = tftp.parse(&recv_buffer);
 
-			//if (recv_msg.sender.address != where.address or recv_msg.sender.port != where.port) {
-			if (recv_msg.sender.port != where.port) {
+			//if (recv_msg.sender.address != current_transfer.remote.address or recv_msg.sender.port != current_transfer.remote.port) {
+			if (recv_msg.sender.port != current_transfer.remote.port) {
 				std.debug.print("Dropped packet (I'm busy)\n", .{});
 				continue;
 			}
@@ -74,6 +87,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 			}
 		}
 	}
+	current_transfer.in_flight = false;
 }
 
 

@@ -23,4 +23,4 @@ clean:
 
 
 experiment:
-	curl tftp://127.0.0.1/self
+	curl tftp://127.0.0.1/build.zig

@@ -18,6 +18,17 @@ pub const ERROR = 5;  // Error (ERROR)
 
 pub const TransferMode = enum { octet, netascii, unknown };
 
+pub const ErrorCode = enum(u8) {
+	other = 0,
+	file_not_found = 1,
+	access_violation = 2,
+	disk_full_or_allocation_exceeded = 3,
+	illegal_tftp_operation = 4,
+	unknown_transfer_id = 5,
+	file_exists = 6,
+	no_such_user = 7,
+};
+
 
 pub fn bytes_to_int(comptime T: type, bytes: []const u8) T {
 	var ret: T = 0;
@@ -157,4 +168,14 @@ pub fn compose_data_packet(cursor: []const u8, pkno: u8, reply: []u8) Next {
 		.more = more,
 		.pkno = pkno+1,
 	};
+}
+
+
+pub fn compose_error_packet(code: ErrorCode) []u8 {
+	var ret = [_]u8{
+		0x00, ERROR,
+		0x00, @enumToInt(code),
+		0x00, // no text
+	};
+	return &ret;
 }
