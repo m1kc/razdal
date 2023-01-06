@@ -97,8 +97,13 @@ fn serve(sock: network.Socket) !void {
 		if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
 		const pkt = tftp.parse(&recv_buffer);
 
-		// REPLY TO RRQ
+		if (pkt.opcode == tftp.WRQ) {
+			// This server is read-only, reply w/ error
+			sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.access_violation)) catch {};
+			continue;
+		}
 
+		// REPLY TO RRQ
 		if (pkt.opcode != tftp.RRQ) continue;
 
 		// `octet` mode only
@@ -107,6 +112,7 @@ fn serve(sock: network.Socket) !void {
 		} else {
 			// not supported
 			std.debug.print("Unsupported transfer mode, ignoring\n", .{});
+			sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
 			continue;
 		}
 
