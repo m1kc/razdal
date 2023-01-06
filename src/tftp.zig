@@ -35,6 +35,21 @@ test "bytes_to_int" {
 	try expect(bytes_to_int(u32, &.{ 0x06, 0x00, 0x00, 0x01 }) == 100663297);
 }
 
+pub fn int_to_bytes(i: u16) [2]u8 {
+	var ret: [2]u8 = .{0} ** 2;
+	ret[1] = math.cast(u8, i % 256).?;
+	ret[0] = math.cast(u8, (i - ret[1]) / 256).?;
+	return ret;
+}
+
+test "int_to_bytes" {
+	try expectEqual(int_to_bytes(0), .{ 0x00, 0x00 });
+	try expectEqual(int_to_bytes(1), .{ 0x00, 0x01 });
+	try expectEqual(int_to_bytes(256), .{ 0x01, 0x00 });
+	try expectEqual(int_to_bytes(513), .{ 0x02, 0x01 });
+	try expectEqual(int_to_bytes(257), .{ 0x01, 0x01 });
+}
+
 
 pub const Packet = struct {
 	opcode: u16,
