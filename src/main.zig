@@ -23,7 +23,9 @@ const Transfer = struct {
 
 
 fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoint) !void {
+	// debug modes
 	const ME_VERY_FAST = true;
+	const ME_SLEEPY = false;
 
 	// Check for unsafe paths
 	if (filename.len == 0 or filename[0] == '/' or std.mem.containsAtLeast(u8, filename, 1, &.{'.','.'})) {
@@ -68,6 +70,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}, head = {}\n", .{marker, marker-4, std.fmt.fmtSliceEscapeLower(reply[0..4])});
 		_ = try sock.sendTo(current_transfer.remote, reply[0..marker]);
+		if (ME_SLEEPY) std.time.sleep(5 * std.time.ns_per_s);
 
 		if (!ME_VERY_FAST) {
 			// Wait for ACK after each packet
@@ -78,6 +81,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 			//if (recv_msg.sender.address != current_transfer.remote.address or recv_msg.sender.port != current_transfer.remote.port) {
 			if (recv_msg.sender.port != current_transfer.remote.port) {
 				std.debug.print("Dropped packet (I'm busy)\n", .{});
+				// _ = sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
 				continue;
 			}
 
@@ -99,7 +103,7 @@ fn serve(sock: network.Socket) !void {
 
 		if (pkt.opcode == tftp.WRQ) {
 			// This server is read-only, reply w/ error
-			sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.access_violation)) catch {};
+			_ = sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.access_violation)) catch {};
 			continue;
 		}
 
@@ -112,7 +116,7 @@ fn serve(sock: network.Socket) !void {
 		} else {
 			// not supported
 			std.debug.print("Unsupported transfer mode, ignoring\n", .{});
-			sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
+			_ = sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
 			continue;
 		}
 
