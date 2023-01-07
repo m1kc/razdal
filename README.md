@@ -9,5 +9,6 @@ TFTP server with very small memory footprint. Stripped binary is about ~130 Kb, 
 Restrictions:
 * read-only (doesn't accept write requests)
 * retransmission not supported
+* RRQ blocks until complete
 
 Written in Zig.
