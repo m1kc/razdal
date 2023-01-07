@@ -73,21 +73,23 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 		if (DEBUG_SLEEPY) std.time.sleep(3 * std.time.ns_per_s);
 
 		if (!ME_VERY_FAST) {
-			// Wait for ACK after each packet
-			const recv_msg = try sock.receiveFrom(&recv_buffer);
-			if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
-			const pkt = tftp.parse(&recv_buffer);
+			var acked = false;
+			while (!acked) {
+				// Wait for ACK after each packet
+				const recv_msg = try sock.receiveFrom(&recv_buffer);
+				if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
+				const pkt = tftp.parse(&recv_buffer);
 
-			//if (recv_msg.sender.address != current_transfer.remote.address or recv_msg.sender.port != current_transfer.remote.port) {
-			if (recv_msg.sender.port != current_transfer.remote.port) {
-				std.debug.print("Dropped packet (I'm busy)\n", .{});
-				// _ = sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
-				continue;
-			}
+				//if (recv_msg.sender.address != current_transfer.remote.address or recv_msg.sender.port != current_transfer.remote.port)
+				if (recv_msg.sender.port != current_transfer.remote.port) {
+					std.debug.print("Dropped packet (I'm busy)\n", .{});
+					_ = sock.sendTo(recv_msg.sender, tftp.compose_error_packet(tftp.ErrorCode.other)) catch {};
+					continue;
+				}
 
-			if (pkt.opcode != tftp.ACK) {
-				// panic
-				continue;
+				if (pkt.opcode == tftp.ACK) {
+					acked = true;
+				}
 			}
 		}
 	}
