@@ -22,5 +22,18 @@ clean:
 	rm -rfv ./zig-out ./zig-cache
 
 
+CURL=curl -s
+ADDR=tftp://127.0.0.1
+e2e:
+	# Normal request
+	xonsh -c 'cmd = !(${CURL} ${ADDR}/build.zig); assert cmd.returncode == 0; assert cmd.output == $$(cat build.zig); exit'
+	xonsh -c 'cmd = !(${CURL} ${ADDR}/src/main.zig); assert cmd.returncode == 0; assert cmd.output == $$(cat src/main.zig); exit'
+	# Unsafe requests get denied
+	xonsh -c 'cmd = !(${CURL} ${ADDR}//etc/passwd); assert cmd.returncode == 69; exit'
+	# TODO: relative paths
+	# dotfiles are allowed for now
+	xonsh -c 'cmd = !(${CURL} ${ADDR}/.gitignore); assert cmd.returncode == 0; assert cmd.output == $$(cat .gitignore); exit'
+	# All good!
+
 experiment:
-	curl tftp://127.0.0.1/build.zig
+	curl ${ADDR}/build.zig
