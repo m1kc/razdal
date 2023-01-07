@@ -55,19 +55,18 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 	while (more) {
 		const len = try current_transfer.file.read(&file_buffer);
 		if (len < 512) more = false;
+		// bytes 0, 1 - packet type
 		reply[0] = 0;
 		reply[1] = tftp.DATA;
-		reply[2] = tftp.int_to_bytes(current_transfer.pkno)[0];
-		reply[3] = tftp.int_to_bytes(current_transfer.pkno)[1];
-		var marker: usize = 4;
-		for (file_buffer[0..len]) |b| {
-			reply[marker] = b;
-			marker += 1;
-		}
+		// bytes 2, 3 - block number
+		std.mem.copy(u8, reply[2..4], &tftp.int_to_bytes(current_transfer.pkno));
+		// bytes 4+ - data
+		std.mem.copy(u8, reply[4..], file_buffer[0..len]);
+		const marker = 4 + len;
 
 		current_transfer.pkno += 1;
 
-		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}, head = {}\n", .{marker, marker-4, std.fmt.fmtSliceEscapeLower(reply[0..4])});
+		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}, head = {}\n", .{marker, len, std.fmt.fmtSliceEscapeLower(reply[0..4])});
 		_ = try sock.sendTo(current_transfer.remote, reply[0..marker]);
 		if (DEBUG_SLEEPY) std.time.sleep(3 * std.time.ns_per_s);
 
