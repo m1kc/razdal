@@ -10,6 +10,9 @@ var recv_buffer: [BUFSIZE]u8 = undefined;
 
 var current_transfer: Transfer = .{};
 
+const DEBUG_SLEEPY = false;
+const ME_VERY_FAST = true;
+
 
 const Transfer = struct {
 	in_flight: bool = false,
@@ -23,10 +26,6 @@ const Transfer = struct {
 
 
 fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoint) !void {
-	// debug modes
-	const ME_VERY_FAST = true;
-	const ME_SLEEPY = false;
-
 	// Check for unsafe paths
 	if (filename.len == 0 or filename[0] == '/' or std.mem.containsAtLeast(u8, filename, 1, &.{'.','.'})) {
 		std.debug.print("(rejected — unsafe path)\n", .{});
@@ -70,7 +69,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 		if (tftp.PROTOCOL_DEBUG) std.debug.print("<< DATA, len = {}, sans header = {}, head = {}\n", .{marker, marker-4, std.fmt.fmtSliceEscapeLower(reply[0..4])});
 		_ = try sock.sendTo(current_transfer.remote, reply[0..marker]);
-		if (ME_SLEEPY) std.time.sleep(5 * std.time.ns_per_s);
+		if (DEBUG_SLEEPY) std.time.sleep(3 * std.time.ns_per_s);
 
 		if (!ME_VERY_FAST) {
 			// Wait for ACK after each packet
