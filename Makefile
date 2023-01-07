@@ -25,12 +25,18 @@ clean:
 CURL=curl -s
 ADDR=tftp://127.0.0.1
 e2e:
+	# Make sure all software is installed
+	which xonsh
+	which curl
+	which tftp
 	# Normal request
 	xonsh -c 'cmd = !(${CURL} ${ADDR}/build.zig); assert cmd.returncode == 0; assert cmd.output == $$(cat build.zig); exit'
 	xonsh -c 'cmd = !(${CURL} ${ADDR}/src/main.zig); assert cmd.returncode == 0; assert cmd.output == $$(cat src/main.zig); exit'
 	# Unsafe requests get denied
 	xonsh -c 'cmd = !(${CURL} ${ADDR}//etc/passwd); assert cmd.returncode == 69; exit'
-	# TODO: check relative paths (curl refuses to send weird paths like a/../../b)
+	# This test has side effect of creating empty .gitkeep, errrrrm, well, yes
+	xonsh -c 'cmd = !(echo "get src/../.gitkeep" | tftp 127.0.0.1); repr(cmd)[:0]; assert cmd.output.find("""Error""") != -1; import sys; sys.exit(0)'
+	rm -f .gitkeep
 	# dotfiles are allowed for now
 	xonsh -c 'cmd = !(${CURL} ${ADDR}/.gitignore); assert cmd.returncode == 0; assert cmd.output == $$(cat .gitignore); exit'
 	# All good!
