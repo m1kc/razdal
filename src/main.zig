@@ -1,9 +1,17 @@
+const tftp = @import("./tftp.zig");
+const bb = @import("./bb.zig");
+
 const std = @import("std");
 const assert = @import("std").debug.assert;
-const network = @import("network");
-const tftp = @import("./tftp.zig");
 
-test { _ = tftp; } //std.testing.refAllDecls(@This());
+const network = @import("network");
+
+test {
+	//std.testing.refAllDecls(@This());
+	_ = bb;
+	_ = tftp;
+}
+
 
 const BUFSIZE: usize = 8192;
 var recv_buffer: [BUFSIZE]u8 = undefined;
@@ -46,22 +54,16 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 	current_transfer.file = f;
 	defer current_transfer.file.close();
 
-	var file_buffer: [512]u8 = undefined;
+	var file_buffer: [tftp.BLOCKSIZE]u8 = undefined;
 
 	var more = true;
 	current_transfer.pkno = 1;
-	var reply: [512 + 4]u8 = undefined;
+	var reply: [tftp.BLOCKSIZE + 4]u8 = undefined;
 
 	while (more) {
 		const len = try current_transfer.file.read(&file_buffer);
-		if (len < 512) more = false;
-		// bytes 0, 1 - packet type
-		reply[0] = 0;
-		reply[1] = tftp.DATA;
-		// bytes 2, 3 - block number
-		std.mem.copy(u8, reply[2..4], &tftp.int_to_bytes(current_transfer.pkno));
-		// bytes 4+ - data
-		std.mem.copy(u8, reply[4..], file_buffer[0..len]);
+		if (len < tftp.BLOCKSIZE) more = false;
+		_ = tftp.compose_data_packet(file_buffer[0..len], current_transfer.pkno, &reply);
 		const marker = 4 + len;
 
 		current_transfer.pkno += 1;
@@ -72,7 +74,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 		if (!ME_VERY_FAST) {
 			// Wait for ACK after each packet
-			const recv_msg = try sock.receiveFrom(recv_buffer[0..BUFSIZE]);
+			const recv_msg = try sock.receiveFrom(&recv_buffer);
 			if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
 			const pkt = tftp.parse(&recv_buffer);
 
@@ -95,7 +97,7 @@ fn serve_file(sock: network.Socket, filename: []const u8, where: network.EndPoin
 
 fn serve(sock: network.Socket) !void {
 	while (true) {
-		const recv_msg = try sock.receiveFrom(recv_buffer[0..BUFSIZE]);
+		const recv_msg = try sock.receiveFrom(&recv_buffer);
 		if (tftp.PROTOCOL_DEBUG) std.debug.print(">> Packet from {}:{}\n", .{recv_msg.sender.address, recv_msg.sender.port});
 		const pkt = tftp.parse(&recv_buffer);
 
@@ -116,7 +118,7 @@ fn serve(sock: network.Socket) !void {
 			continue;
 		}
 
-		const filename = tftp.get_filename(recv_buffer[0..BUFSIZE]);
+		const filename = tftp.get_filename(&recv_buffer);
 		std.debug.print("{} requested file: {s}\n", .{recv_msg.sender.address, filename});
 		try serve_file(sock, filename, recv_msg.sender);
 	}

@@ -30,7 +30,7 @@ e2e:
 	xonsh -c 'cmd = !(${CURL} ${ADDR}/src/main.zig); assert cmd.returncode == 0; assert cmd.output == $$(cat src/main.zig); exit'
 	# Unsafe requests get denied
 	xonsh -c 'cmd = !(${CURL} ${ADDR}//etc/passwd); assert cmd.returncode == 69; exit'
-	# TODO: relative paths
+	# TODO: check relative paths (curl refuses to send weird paths like a/../../b)
 	# dotfiles are allowed for now
 	xonsh -c 'cmd = !(${CURL} ${ADDR}/.gitignore); assert cmd.returncode == 0; assert cmd.output == $$(cat .gitignore); exit'
 	# All good!

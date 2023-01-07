@@ -1,3 +1,5 @@
+const bb = @import("./bb.zig");
+
 const builtin = @import("builtin");
 const std = @import("std");
 const assert = @import("std").debug.assert;
@@ -5,11 +7,15 @@ const network = @import("network");
 const expect = @import("std").testing.expect;
 const expectEqual = @import("std").testing.expectEqual;
 const expectEqualStrings = @import("std").testing.expectEqualStrings;
+const expectEqualSlices = @import("std").testing.expectEqualSlices;
 const math = @import("std").math;
 
 
 pub var PROTOCOL_DEBUG = (false) and !builtin.is_test;
 
+pub const BLOCKSIZE: usize = 512;
+
+// Protocol declarations
 pub const RRQ = 1;    // Read request (RRQ)
 pub const WRQ = 2;    // Write request (WRQ)
 pub const DATA = 3;   // Data (DATA)
@@ -28,38 +34,6 @@ pub const ErrorCode = enum(u8) {
 	file_exists = 6,
 	no_such_user = 7,
 };
-
-
-pub fn bytes_to_int(comptime T: type, bytes: []const u8) T {
-	var ret: T = 0;
-	for (bytes) |value| {
-		ret = ret*128*2 + value;  // not mentioning 256 allows u8 output, just in case
-	}
-	return ret;
-}
-
-test "bytes_to_int" {
-	try expect(bytes_to_int(u8, &.{ 0x05 }) == 5);
-	try expect(bytes_to_int(u16, &.{ 0x01, 0x00 }) == 256);
-	try expect(bytes_to_int(u32, &.{ 0x01, 0x00 }) == 256);
-	try expect(bytes_to_int(u32, &.{ 0x00, 0x00, 0x01, 0x00 }) == 256);
-	try expect(bytes_to_int(u32, &.{ 0x06, 0x00, 0x00, 0x01 }) == 100663297);
-}
-
-pub fn int_to_bytes(i: u16) [2]u8 {
-	var ret: [2]u8 = .{0} ** 2;
-	ret[1] = math.cast(u8, i % 256).?;
-	ret[0] = math.cast(u8, (i - ret[1]) / 256).?;
-	return ret;
-}
-
-test "int_to_bytes" {
-	try expectEqual(int_to_bytes(0), .{ 0x00, 0x00 });
-	try expectEqual(int_to_bytes(1), .{ 0x00, 0x01 });
-	try expectEqual(int_to_bytes(256), .{ 0x01, 0x00 });
-	try expectEqual(int_to_bytes(513), .{ 0x02, 0x01 });
-	try expectEqual(int_to_bytes(257), .{ 0x01, 0x01 });
-}
 
 
 pub const Packet = struct {
@@ -106,7 +80,7 @@ test "parse" {
 
 
 pub fn get_opcode(msg: []const u8) u16 {
-	return bytes_to_int(u16, msg[0..2]);
+	return bb.bytes_to_int(u16, msg[0..2]);
 }
 
 test "get_opcode" {
@@ -141,33 +115,21 @@ test "find_sentinel" {
 }
 
 
-const Next = struct { reply: []const u8, cursor: []const u8, pkno: u8, more: bool };
+pub fn compose_data_packet(data: []const u8, block_num: u16, ret: []u8) []u8 {
+	assert(ret.len >= data.len + 4);
+	// bytes 0, 1: pkt type
+	ret[0] = 0; ret[1] = DATA;
+	// bytes 2, 3: block number
+	std.mem.copy(u8, ret[2..4], &bb.int_to_bytes(block_num));
+	// bytes 4+: data
+	std.mem.copy(u8, ret[4..], data);
+	return ret[0..4+data.len];
+}
 
-pub fn compose_data_packet(cursor: []const u8, pkno: u8, reply: []u8) Next {
-	reply[0] = 0; reply[1] = DATA;  // type
-	reply[2] = 0; reply[3] = pkno;  // block number
-	var len: usize = 4;
+test "compose_data_packet" {
+	var buffer: [BLOCKSIZE + 4]u8 = undefined;
 
-	for (cursor[0..math.min(512, cursor.len)]) |b| {
-		reply[len] = b;
-		len += 1;
-	}
-
-	var more = false;
-	var next_cursor = cursor;
-	if (cursor.len >= 512) {
-		next_cursor = cursor[512..];
-		more = true;
-	}
-
-	// std.debug.print("{any}\n", .{reply});
-
-	return Next{
-		.reply = reply[0..len],
-		.cursor = next_cursor,
-		.more = more,
-		.pkno = pkno+1,
-	};
+	try expectEqualSlices(u8, &.{0,DATA,2,1,11,22,33}, compose_data_packet(&.{11,22,33}, 513, &buffer));
 }
 
 
@@ -178,4 +140,9 @@ pub fn compose_error_packet(code: ErrorCode) []u8 {
 		0x00, // no text
 	};
 	return &ret;
+}
+
+test "compose_error_packet" {
+	//var buffer: [200]u8 = undefined;
+	try expectEqualSlices(u8, &.{0,ERROR,0,2,0}, compose_error_packet(ErrorCode.access_violation));
 }
