@@ -11,6 +11,10 @@ release:
 	ls -lh zig-out/bin
 	file zig-out/bin/razdal
 
+win:
+	# This is experimental, not guaranteed to work at all
+	zig build -Drelease-safe -Dtarget=x86_64-windows-gnu
+
 test:
 	zig build test
 
