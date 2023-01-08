@@ -120,9 +120,8 @@ fn serve(sock: network.Socket) !void {
 			continue;
 		}
 
-		const filename = tftp.get_filename(&recv_buffer);
-		std.debug.print("{} requested file: {s}\n", .{recv_msg.sender.address, filename});
-		try serve_file(sock, filename, recv_msg.sender);
+		std.debug.print("{} requested file: {s}\n", .{recv_msg.sender.address, pkt.data_filename});
+		try serve_file(sock, pkt.data_filename, recv_msg.sender);
 	}
 }
 
