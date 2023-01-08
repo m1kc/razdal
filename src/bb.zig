@@ -1,7 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
 const assert = @import("std").debug.assert;
-const network = @import("network");
 const expect = @import("std").testing.expect;
 const expectEqual = @import("std").testing.expectEqual;
 const expectEqualStrings = @import("std").testing.expectEqualStrings;

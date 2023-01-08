@@ -3,12 +3,13 @@ const bb = @import("./bb.zig");
 const builtin = @import("builtin");
 const std = @import("std");
 const assert = @import("std").debug.assert;
-const network = @import("network");
 const expect = @import("std").testing.expect;
 const expectEqual = @import("std").testing.expectEqual;
 const expectEqualStrings = @import("std").testing.expectEqualStrings;
 const expectEqualSlices = @import("std").testing.expectEqualSlices;
 const math = @import("std").math;
+
+const network = @import("network");
 
 
 pub var PROTOCOL_DEBUG = (false) and !builtin.is_test;

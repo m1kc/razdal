@@ -128,7 +128,7 @@ fn serve(sock: network.Socket) !void {
 
 
 pub fn main() !void {
-	std.debug.print("\n//////// This is m1kc-tftpd, pre-release ////////\n", .{});
+	std.debug.print("\n//////// This is Razdal tftp server, pre-release ////////\n", .{});
 
 	{
 		var buf: [10240]u8 = undefined;
